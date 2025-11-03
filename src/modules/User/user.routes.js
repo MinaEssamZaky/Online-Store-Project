@@ -1,9 +1,12 @@
 import express from "express";
 import { approveUserAccount, changePassword, deleteUserById, forgotPassword, GitAllStoreOwner, GitAllUsers, GitAllWholesaler, GitUserById, rejectUserAccount, resendVerifyEmail, resetPassword, signIn, signUp, Update, VerifyEmail } from "./user.controller.js";
-import { upload } from "../../Utils/multer.js";
 import { auth, authorizeRoles } from "../../middleware/auth.js";
+import multer from "multer";
+import { storage } from "../../Utils/cloudinary.config.js";
 
 const userRoutes = express.Router();
+
+const upload = multer({ storage}); 
 
 userRoutes.post("/signUp", upload.single("commercialRegister"), signUp);
 userRoutes.post("/signIn", signIn);
