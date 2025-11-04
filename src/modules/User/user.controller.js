@@ -8,36 +8,38 @@ import { sendMail } from "../../email/sendEmail.js";
 export const signUp = handleError(async (req, res, next) => {
   const { firstName, lastName, email, password, phone, userType, businessName } = req.body;
 
+  if (!email || !password) return next(new AppError("Email and password are required", 400));
+  if (!firstName || !lastName) return next(new AppError("First and last name are required", 400));
+
+  // Address parsing & validation
   let address = {};
   if (!req.body.address) {
     return next(new AppError("Address is required and must include street and city", 400));
   }
   try {
     address = (typeof req.body.address === "string") ? JSON.parse(req.body.address) : req.body.address;
-  } catch (e) {
+  } catch (err) {
     return next(new AppError("Invalid address format", 400));
   }
-
   if (!address.street || !address.city) {
     return next(new AppError("Address must include street and city", 400));
   }
 
-  if (await userModel.findOne({ email })) return next(new AppError("Email already registered", 400));
+  // check existing email
+  const existing = await userModel.findOne({ email });
+  if (existing) return next(new AppError("Email already registered", 400));
 
-  if ((userType === "storeOwner" || userType === "wholesaler")) {
-    if (!businessName) {
-      return next(new AppError("businessName is required for this userType", 400));
-    }
-    if (!req.file) {
-      return next(new AppError("commercialRegister image is required for this userType", 400));
-    }
+  // userType checks
+  if (userType === "storeOwner" || userType === "wholesaler") {
+    if (!businessName) return next(new AppError("businessName is required for this userType", 400));
+    if (!req.file) return next(new AppError("commercialRegister image is required for this userType", 400));
   }
 
-  const saltRounds = parseInt((process.env.SALT_ROUNDS || "10").toString().trim(), 10);
-  const hashed = await bcrypt.hash(password, isNaN(saltRounds) ? 10 : saltRounds);
+  // hash password
+  const saltRounds = Number.parseInt(process.env.SALT_ROUNDS || "10", 10) || 10;
+  const hashed = await bcrypt.hash(password, saltRounds);
 
-  const accountStatus = (userType === "customer") ? "approved" : "pending";
-
+  // prepare payload
   const payload = {
     firstName,
     lastName,
@@ -46,28 +48,36 @@ export const signUp = handleError(async (req, res, next) => {
     phone,
     address,
     userType,
-    accountStatus,
+    accountStatus: userType === "customer" ? "approved" : "pending",
     businessInfo: {}
   };
 
   if (businessName) payload.businessInfo.businessName = businessName;
   if (req.file) {
-    payload.businessInfo.commercialRegister = req.file.path.replace(/\\/g, "/");
+    // if using cloudinary, req.file may contain `path` or `secure_url` or `filename`
+    // adapt to what your multer/cloudinary returns:
+    payload.businessInfo.commercialRegister = req.file.path ? req.file.path.replace(/\\/g, "/") : (req.file.secure_url || req.file.filename || "");
   }
 
-    const token = jwt.sign(
-    { email: user.email },
-    (process.env.TOKEN || "secret").toString().trim(),
-    { expiresIn: "15m" }
-  );
-
-     await sendMail(email, token);
-
-
+  // Create user first
   const user = await userModel.create(payload);
 
+  // Create email verification token (use user id or email)
+  const tokenPayload = { id: user._id, email: user.email };
+  const token = jwt.sign(tokenPayload, (process.env.TOKEN || "secret").toString().trim(), { expiresIn: "15m" });
 
+  // Optionally: save verification token to user document (recommended)
+  // await userModel.findByIdAndUpdate(user._id, { verifyToken: token, verifyTokenExpires: Date.now() + 15*60*1000 });
 
+  // Send verification email — if it fails we catch and log but do not break user creation
+  try {
+    await sendMail(email, token);
+  } catch (mailErr) {
+    console.error("Failed to send verification email:", mailErr);
+    // you may optionally update user doc to mark email not sent
+  }
+
+  // Prepare response (do NOT send hashed password or raw token in production)
   const responseData = {
     id: user._id,
     userType: user.userType,
@@ -81,7 +91,6 @@ export const signUp = handleError(async (req, res, next) => {
         city: user.address.city
       }
     },
-    password: "********",
     accountStatus: user.accountStatus
   };
 
@@ -95,7 +104,6 @@ export const signUp = handleError(async (req, res, next) => {
   return res.status(201).json({
     message: "User registered",
     Data: responseData,
-    token
   });
 });
 
