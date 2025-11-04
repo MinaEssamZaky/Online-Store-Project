@@ -14,8 +14,8 @@ export const sendMail = async (email, token, resetLink = null) => {
         });
 
         const subject = resetLink
-            ? "Reset Your Password"
-            : "Welcome To The UGM Meeting";
+            ? "Reset Your Glow Beauty Password"
+            : "Welcome To Glow Beauty";
 
         const html = resetLink
             ? `<h3>Click the link below to reset your password:</h3>
@@ -24,7 +24,7 @@ export const sendMail = async (email, token, resetLink = null) => {
             : emailTemplate(token); 
 
         const info = await transporter.sendMail({
-            from: '"UGM Meeting" <ugmmeeting@gmail.com>',
+            from: '"Glow Beauty" <ugmmeeting@gmail.com>',
             to: email,
             subject,
             html,
