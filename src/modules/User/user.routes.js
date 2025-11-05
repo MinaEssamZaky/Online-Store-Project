@@ -11,7 +11,7 @@ const upload = multer({ storage});
 userRoutes.post("/signUp", upload.single("commercialRegister"), signUp);
 userRoutes.post("/signIn", signIn);
 userRoutes.put("/changePassword",auth(),changePassword)
-userRoutes.post("/forgotPassword", auth(),forgotPassword)
+userRoutes.post("/forgotPassword",forgotPassword)
 userRoutes.post("/resetPassword/:token", resetPassword);
 userRoutes.get("/verifyEmail", VerifyEmail)
 userRoutes.post("/resendVerifyEmail",resendVerifyEmail)
